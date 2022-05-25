@@ -196,3 +196,45 @@ impl<T, Store> Link<T, Store> {
         Ok(k)
     }
 }
+
+#[cfg(test)]
+mod test {
+    use std::marker::PhantomData;
+
+    use cid::Cid;
+    use serde::{Deserialize, Serialize};
+
+    use crate::{Link, MagicStore, StaticStore};
+
+    // TODO Having the store here is _really_ annoying. We might just want to remove it entirely.
+
+    #[derive(Deserialize, Serialize)]
+    #[serde(bound = "")] // ugh. The generic parameter really needs to go.
+    struct DataObject<Store: StaticStore> {
+        field1: String,
+        field2: String,
+        _marker: PhantomData<fn(Store)>, // future proof. ew.
+    }
+    #[derive(Deserialize, Serialize)]
+    #[serde(bound = "")]
+    struct State<Store: StaticStore> {
+        name: String,
+        data1: Link<DataObject<Store>, Store>,
+        data2: Link<DataObject<Store>, Store>,
+    }
+
+    // Having to specify `MagicStore` here kind of defeats the point of abstracting over different
+    // store types.
+    impl<Store: MagicStore> State<Store> {
+        pub fn set_data1_field1(&mut self, field1: String) {
+            // Lazily loads `data1`, modifies, it, and marks it as dirty (because we mutably
+            // dereference it).
+            self.data1.field1 = field1
+        }
+
+        pub fn save(&self) -> Cid {
+            // Saves the object, returning a CID. This will internally save any _modified_ objects.
+            Store::unwrap(Store::store(self, None))
+        }
+    }
+}
