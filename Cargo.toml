@@ -9,5 +9,5 @@ edition = "2021"
 crate-type = ["lib"]
 
 [dependencies]
-cid = { version = "0.8.4", features = ["serde-codec"] }
+cid = { version = "0.10.1", features = ["serde-codec"] }
 serde = "1.0.136"

@@ -1,6 +1,5 @@
 use std::{
-    cell::Cell,
-    lazy::OnceCell,
+    cell::{Cell, OnceCell},
     marker::PhantomData,
     ops::{Deref, DerefMut},
 };
@@ -97,8 +96,12 @@ impl<T, Store, const S: usize> AutoLink<T, Store, S> {
         T: DeserializeOwned,
         Store: StaticStore,
     {
-        self.value
-            .get_or_try_init(|| Store::load(&self.state.get().unwrap_ref()))
+        // TODO: get_or_try_init
+        if let Some(val) = self.value.get() {
+            return Ok(val);
+        }
+        let val = Store::load(&self.state.get().unwrap_ref())?;
+        Ok(self.value.get_or_init(|| val))
     }
 
     /// Edit the object.

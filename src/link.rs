@@ -1,8 +1,7 @@
 use cid::Cid;
 use serde::{de::DeserializeOwned, ser::Error, Deserialize, Deserializer, Serialize, Serializer};
 use std::{
-    cell::Cell,
-    lazy::OnceCell,
+    cell::{Cell, OnceCell},
     marker::PhantomData,
     ops::{Deref, DerefMut},
 };
@@ -13,25 +12,31 @@ use crate::{CidShape, MagicStore, StaticStore};
 /// writes it back on [`Link::save`].
 ///
 /// ```
-/// use auto_ipld::{Link, BadStore as Store, MagicStore};
+/// use auto_ipld::{Link, MagicStore, StaticStore};
 /// use serde::{Deserialize, de::DeserializeOwned};
 ///
 /// #[derive(Deserialize)]
-/// pub struct Node<T, Store> {
+/// pub struct Node<T, Store> where Store: StaticStore {
 ///     pub value: T,
-///     pub next: Option<Link<Box<Node<T>>, Store>>,
+///     pub next: Option<Link<Box<Node<T, Store>>, Store>>,
 /// }
 ///
-/// impl<T, Store> Node<T, Store> where Store: MagicStore {
+/// impl<T, Store> Node<T, Store>
+/// where
+///     Store: MagicStore,
+///     Self: DeserializeOwned,
+/// {
 ///     pub fn find(&self, mut cond: impl FnMut(&T) -> bool) -> Option<&T>
 ///     where
 ///         T: DeserializeOwned,
 ///     {
 ///         if cond(&self.value) {
 ///             return Some(&self.value)
-///         } else {
+///         } else if let Some(next) = &self.next {
 ///             // obviously a horrible idea, bit it's a demo!
-///             self.next.as_deref().and_then(|next| next.find(cond))
+///             next.find(cond)
+///         } else {
+///             None
 ///         }
 ///     }
 /// }
@@ -144,8 +149,12 @@ impl<T, Store> Link<T, Store> {
         T: DeserializeOwned,
         Store: StaticStore,
     {
-        self.value
-            .get_or_try_init(|| Store::load(&self.state.get().unwrap_unmodified()))
+        // TODO: get_or_try_init
+        if let Some(val) = self.value.get() {
+            return Ok(val);
+        }
+        let val = Store::load(&self.state.get().unwrap_unmodified())?;
+        Ok(self.value.get_or_init(|| val))
     }
 
     /// Edit the linked object. Like [`Link::read`], this will automatically load and decode the
